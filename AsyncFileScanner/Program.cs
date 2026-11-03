@@ -19,7 +19,19 @@ var extensions = extInput
     .Select(e => e.StartsWith(".") ? e : "." + e)
     .ToList();
 
-var options = new ScanOptions(dirPath, extensions);
+Console.WriteLine("\nМинимальный размер (КБ):");
+long minKb = long.Parse(Console.ReadLine()?.Trim() ?? "0");
+
+Console.WriteLine("Максимальный размер (КБ) (0 для без ограничений):");
+long maxKb = long.Parse(Console.ReadLine()?.Trim() ?? "0");
+
+long minBytes = minKb * 1024;
+long maxBytes = maxKb == 0 ? long.MaxValue : maxKb * 1024;
+
+Console.WriteLine("\nВведите максимальное количество одновременных операций:");
+int maxConcurrency = int.Parse(Console.ReadLine()?.Trim() ?? "4");
+
+var options = new ScanOptions(dirPath, extensions, minBytes, maxBytes);
 
 using var cts = new CancellationTokenSource();
 
@@ -37,7 +49,7 @@ var scanner = new FileScanner(probe);
 
 try
 {
-    var summary = await scanner.ScanAsync(options, cts.Token);
+    var summary = await scanner.ScanAsync(options, maxConcurrency, cts.Token);
 
     if (cts.Token.IsCancellationRequested)
     {
@@ -46,24 +58,45 @@ try
     }
     else
     {
-        Console.WriteLine("\nНайденные файлы:\n");
+        Console.WriteLine("\n=== РЕЗУЛЬТАТ СКАНИРОВАНИЯ ===\n");
+        Console.WriteLine($"Просмотрено файлов: {summary.TotalFilesScanned}");
+        Console.WriteLine($"Подходящих файлов: {summary.MatchingFilesCount}");
 
-        for (int i = 0; i < summary.Results.Count; i++)
+        double sizeInMb = summary.TotalMatchingSizeBytes / (1024.0 * 1024.0);
+        Console.WriteLine($"Общий размер: {sizeInMb:F2} МБ");
+
+        Console.WriteLine($"Ошибок: {summary.ErrorCount}");
+        Console.WriteLine($"Время выполнения: {summary.ElapsedTime.TotalSeconds:F2} сек.");
+
+        Console.WriteLine($"\nОграничение: {summary.ConcurrencyLimit}");
+        Console.WriteLine($"Максимум одновременно обрабатываемых файлов: {summary.MaxObservedConcurrentOperations}");
+
+        if (summary.Results.Count > 0)
         {
-            var res = summary.Results[i];
-            Console.WriteLine($"[{i + 1}] {res.FileName,-20} {res.SizeInBytes} байт");
-        }
+            Console.WriteLine("\nНайденные файлы (первые 10):");
+            var topResults = summary.Results.Take(10).ToList();
+            for (int i = 0; i < topResults.Count; i++)
+            {
+                var res = topResults[i];
+                Console.WriteLine($"[{i + 1}] {res.FileName,-25} {res.SizeInBytes,10} байт (прочитано заголовка: {res.HeaderBytesRead})");
+            }
 
-        Console.WriteLine("\nСканирование завершено.");
-        Console.WriteLine($"\nВсего найдено файлов: {summary.SuccessfulFiles}");
-        Console.WriteLine($"Общий размер: {summary.TotalBytes} байт");
+            if (summary.Results.Count > 10)
+            {
+                Console.WriteLine($"... и ещё {summary.Results.Count - 10} файлов.");
+            }
+        }
 
         if (summary.Errors.Count > 0)
         {
-            Console.WriteLine("\nОшибки при обработке:");
-            foreach (var err in summary.Errors)
+            Console.WriteLine("\nОшибки при обработке (первые 5):");
+            foreach (var err in summary.Errors.Take(5))
             {
                 Console.WriteLine($"- {err}");
+            }
+            if (summary.Errors.Count > 5)
+            {
+                Console.WriteLine($"... и ещё {summary.Errors.Count - 5} ошибок.");
             }
         }
     }

@@ -8,8 +8,11 @@ namespace AsyncFileScanner.Models;
 
 public sealed record ScanSummary(
     int TotalFilesScanned,
-    int SuccessfulFiles,
-    long TotalBytes,
+    int MatchingFilesCount,
+    long TotalMatchingSizeBytes,
+    int ErrorCount,
     TimeSpan ElapsedTime,
+    int ConcurrencyLimit,
+    int MaxObservedConcurrentOperations,
     IReadOnlyList<ScanResult> Results,
     IReadOnlyList<string> Errors);
